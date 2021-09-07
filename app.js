@@ -17,7 +17,7 @@ function formatDate(date, includeMS = false) {
     let h = adjustZeros(date.getHours());
     let m = adjustZeros(date.getMinutes());
     let s = adjustZeros(date.getUTCSeconds());
-    let ms = adjustZeros(date.getUTCMilliseconds());
+    let ms = adjustZeros(date.getUTCMilliseconds(), 3);
 
     return `${D}.${M}.${Y} ${h}:${m}:${s}` + (includeMS ? ':' + ms : '');
 }
@@ -52,7 +52,7 @@ function botSetup(bot, configIndex) {
                     role: 'editor',
                     is_contact: 0
                 });
-                log(`User ${ctx.message.from_id} modded`);
+                log(`User ${ctx.message.from_id} modded in group #${configIndex}`);
                 ctx.reply('Ты назначен редактором. Теперь ты можешь писать от имени сообщества');
             }
             catch (e) {
@@ -118,7 +118,18 @@ function botSetup(bot, configIndex) {
             }
         });
 
-        bot.event();
+        bot.event('message_reply', ctx => {
+            if (ctx.message.from_id < 0) return; //Исходящее сообщение от бота
+            //log(ctx.message.text, ctx.message.from_id, );
+            if (/[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z]{1,4}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)?/gi.test(ctx.message.text)) {
+                group.bot.sendMessage(ctx.message.from_id, 'Кажется, ты прислал кому-то сообщение со спамом. Если это не так, тебя скоро разбанят. Поаккуратнее со ссылками');
+                api('messages.delete', {
+                    access_token: group.token,
+                    message_ids: ctx.message.id
+                });
+                ban(ctx.message.from_id, 'sus incoming message: \n' + ctx.message.text);
+            }
+        });
     }
     else {
         bot.command('/admins', async ctx => {
@@ -131,12 +142,22 @@ function botSetup(bot, configIndex) {
             ctx.reply('amogus');
         });
         bot.command('/ban', async ctx => {
-            let id = +ctx.message.text.replace('/ban', '').trim();
-            if (isNaN(id)) ctx.reply('nan');
-            await ban(id, 'by admin');
+            let cmd = ctx.message.text.split(' ').slice(1);
+            if (cmd.length < 2 || isNaN(cmd[0])) return ctx.reply('/ban [ID юзера] [причина]');
+            await ban(+cmd[0], 'Admin\'s discretion: ' + cmd.slice(1).join(' '));
+        });
+        bot.command('/unban', async ctx => {
+            let cmd = ctx.message.text.split(' ').slice(1);
+            if (cmd.length < 1 || isNaN(cmd[0])) return ctx.reply('/unban [ID юзера]');
+            await unban(+cmd[0]);
+            ctx.reply('Разбанен');
         });
     }
-    bot.startPolling().then(() => log("Bot started for group #" + configIndex));
+    bot.startPolling().then(() => {
+        log("Bot started for group #" + configIndex);
+        group.botStarted = true;
+        if (config.groups.every(g => g.botStarted)) log('All bots started');
+    });
 }
 
 config.groups.forEach((g, i) => {
@@ -167,7 +188,7 @@ async function unmod(group, user, reason) {
             user_id: user,
             is_contact: 0
         });
-        log(`User ${user} unmodded: ${reason}`);
+        log(`User ${user} unmodded from ${config.groups.indexOf(group)}: ${reason}`);
         return 1;
     }
     catch (e) {
@@ -177,8 +198,9 @@ async function unmod(group, user, reason) {
 }
 
 async function ban(user, reason) {
-    for (let i = 0; i < config.groups.length; i++) {
+    for (let i = 1; i < config.groups.length; i++) {
         let g = config.groups[i];
+        await unmod(g, user, `ban`);
         try {
             await api('groups.ban', {
                 access_token: config.adminToken,
@@ -199,12 +221,12 @@ async function ban(user, reason) {
             else throw e;
         }
     }
-    //todo notify admin
+    await notifyAdmin(`[Бан] ${user} ${reason}`);
     log(`User ${user} banned: ${reason}`);
 }
 
 async function unban(user) {
-    for (let i = 0; i < config.groups.length; i++) {
+    for (let i = 1; i < config.groups.length; i++) {
         let g = config.groups[i];
         try {
             await api('groups.unban', {
@@ -226,4 +248,12 @@ async function unban(user) {
     }
     //todo notify admin
     log(`User ${user} unbanned`);
+}
+
+async function notifyAdmin(msg) {
+    /**
+     * @type {VkBot}
+     */
+    let bot = config.groups[0].bot;
+    await bot.sendMessage(config.adminId, msg);
 }
