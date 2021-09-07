@@ -153,6 +153,7 @@ function botSetup(bot, configIndex) {
             ctx.reply('Разбанен');
         });
     }
+    bot.command('/test', ctx => ctx.reply('Бот работает'));
     bot.startPolling().then(() => {
         log("Bot started for group #" + configIndex);
         group.botStarted = true;
