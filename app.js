@@ -162,6 +162,31 @@ function botSetup(bot, configIndex) {
             }
             else ctx.reply('[Бот] Нет паблика #' + idx);
         });
+        bot.command((config.debug ? '/' : '') + '/massSend', async ctx => {
+            let cmd = ctx.message.text.split(' ').slice(1);
+            if (cmd.length < 2 || isNaN(cmd[0])) return ctx.reply('[Бот] /massSend [№ паблика] [сообщение]');
+            let idx = cmd[0];
+
+            if (config.groups[idx]) {
+                let g = config.groups[idx];
+                ctx.reply('[Бот] Секунду...');
+                let admins = await getAdminList(config.groups[idx]);
+                try {
+                    await api('messages.send', {
+                        access_token: g.token,
+                        peer_ids: admins.join(','),
+                        message: cmd.slice(1).join(' '),
+                        random_id: Math.round(Math.random() * 10**9)
+                    });
+                    ctx.reply('[Бот] Готово');
+                }
+                catch (e) {
+                    if (e instanceof ApiError) ctx.reply(`[Бот] Ошибка #${e.response.error_code} (${e.response.error_msg})`);
+                    else throw e;
+                }
+            }
+            else ctx.reply('[Бот] Нет паблика #' + idx);
+        });
         bot.command((config.debug ? '/' : '') + '/ban', async ctx => {
             let cmd = ctx.message.text.split(' ').slice(1);
             if (cmd.length < 2 || isNaN(cmd[0])) return ctx.reply('[Бот] /ban [ID юзера] [причина]');
