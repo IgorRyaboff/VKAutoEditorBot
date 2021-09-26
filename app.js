@@ -33,8 +33,8 @@ log('Запускаем...');
 function botSetup(bot, configIndex) {
     let group = config.groups[configIndex];
     if (configIndex) {
-        bot.command('+', async (ctx, next) => {
-            if (ctx.message.text != '+') next();
+        bot.command((config.debug ? '+' : '') + '+', async (ctx, next) => {
+            if (ctx.message.text != ((config.debug ? '+' : '') + '+')) next();
             ctx.reply('[Бот] Секунду...');
             for (let i = 1; i < config.groups.length; i++) {
                 let g = config.groups[i];
@@ -80,8 +80,8 @@ function botSetup(bot, configIndex) {
 
         });
 
-        bot.command('-', async (ctx, next) => {
-            if (ctx.message.text != '-') next();
+        bot.command((config.debug ? '-' : '') + '-', async (ctx, next) => {
+            if (ctx.message.text != ((config.debug ? '-' : '') + '-')) next();
             ctx.reply('[Бот] Секунду...');
             let admins = await getAdminList(group);
             if (admins.indexOf(ctx.message.from_id) != -1) {
@@ -153,7 +153,7 @@ function botSetup(bot, configIndex) {
         });
     }
     else {
-        bot.command('/admins', async ctx => {
+        bot.command((config.debug ? '/' : '') + '/admins', async ctx => {
             let idx = +ctx.message.text.replace('/admins', '').trim();
             if (config.groups[idx]) {
                 ctx.reply('[Бот] Секунду...');
@@ -162,20 +162,20 @@ function botSetup(bot, configIndex) {
             }
             else ctx.reply('[Бот] Нет паблика #' + idx);
         });
-        bot.command('/ban', async ctx => {
+        bot.command((config.debug ? '/' : '') + '/ban', async ctx => {
             let cmd = ctx.message.text.split(' ').slice(1);
             if (cmd.length < 2 || isNaN(cmd[0])) return ctx.reply('[Бот] /ban [ID юзера] [причина]');
             ctx.reply('[Бот] Секунду...');
             await ban(+cmd[0], 'Решение админа: ' + cmd.slice(1).join(' '));
         });
-        bot.command('/unban', async ctx => {
+        bot.command((config.debug ? '/' : '') + '/unban', async ctx => {
             let cmd = ctx.message.text.split(' ').slice(1);
             if (cmd.length < 1 || isNaN(cmd[0])) return ctx.reply('[Бот] /unban [ID юзера]');
             ctx.reply('[Бот] Секунду...');
             await unban(+cmd[0]);
             ctx.reply('[Бот] Разбанен');
         });
-        bot.command('/search', async ctx => {
+        bot.command((config.debug ? '/' : '') + '/search', async ctx => {
             let cmd = ctx.message.text.split(' ').slice(1);
             if (cmd.length < 1) return ctx.reply('[Бот] /search [подстрока]');
             ctx.reply('[Бот] Секунду...');
@@ -183,7 +183,7 @@ function botSetup(bot, configIndex) {
             ctx.reply(`[Бот] Найдено ${r.length} сообщений. Первые 20:\n\n${r.slice(0, 20).map(x => `[${x.group_id} ${x.id}] ` + x.text.substr(0, 50) + (x.text.length > 50 ? '...' : '')).join('\n')}`);
         });
     
-        bot.command('/clearspam', async ctx => {
+        bot.command((config.debug ? '/' : '') + '/clearspam', async ctx => {
             let cmd = ctx.message.text.split(' ').slice(1);
             if (cmd.length < 1) return ctx.reply('[Бот] /clearspam [подстрока]');
             ctx.reply('[Бот] Секунду...');
@@ -208,7 +208,7 @@ function botSetup(bot, configIndex) {
                 if (!msgs.length) continue;
                 try {
                     await api('messages.delete', {
-                        access_token: g.token,
+                        access_token: config.adminToken,
                         group_id: g.id,
                         message_ids: msgs.map(x => x.id).join(','),
                         delete_for_all: 1
@@ -222,7 +222,7 @@ function botSetup(bot, configIndex) {
             ctx.reply(`[Бот] Найдено: ${count + countOutdated}; удалено: ${count}; старых сообщений: ${countOutdated}`);
         });
 
-        bot.command('/uid', async ctx => {
+        bot.command((config.debug ? '/' : '') + '/uid', async ctx => {
             let cmd = ctx.message.text.split(' ').slice(1);
             if (cmd.length < 1) return ctx.reply('[Бот] /uid [ID или короткий URL]');
             ctx.reply('[Бот] Секунду...');
@@ -230,7 +230,7 @@ function botSetup(bot, configIndex) {
             ctx.reply(`[Бот] https://vk.com/${cmd[0]} == ${r}`);
         });
     }
-    bot.command('/test', ctx => ctx.reply('[Бот] Бот работает'));
+    bot.command((config.debug ? '/' : '') + '/test', ctx => ctx.reply('[Бот] Бот работает'));
 
     bot.startPolling().then(() => {
         log(`Запущен бот паблика #${configIndex} (${group.link})`);
@@ -354,16 +354,14 @@ async function search(query, oneArray) {
             group_id: g.id,
             v: '5.131'
         });
-        if (oneArray) result = [...result, ...r.response.items.map(x => {
+        let arr = [...result, ...r.response.items.map(x => {
             x.group_id = g.id;
             return x;
-        })];
+        })].filter(x => x.from_id < 0);
+        if (oneArray) result = arr;
         else {
             if (!result[i]) result[i] = [];
-            result[i] = [...result[i], ...r.response.items.map(x => {
-                x.group_id = g.id;
-                return x;
-            })];
+            result[i] = arr;
         }
     }
     return result;
