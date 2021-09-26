@@ -77,7 +77,7 @@ function botSetup(bot, configIndex) {
                 }
                 else throw e;
             }
-            
+
         });
 
         bot.command('-', async (ctx, next) => {
@@ -124,10 +124,32 @@ function botSetup(bot, configIndex) {
                 group.bot.sendMessage(ctx.message.from_id, '[Бот] Кажется, ты прислал кому-то сообщение со спамом. Если это не так, тебя скоро разбанят. Поаккуратнее со ссылками');
                 api('messages.delete', {
                     access_token: group.token,
-                    message_ids: ctx.message.id
+                    group_id: group.id,
+                    message_ids: ctx.message.id,
+                    delete_for_all: 1
                 });
                 ban(ctx.message.from_id, 'Подозрительное сообщение: \n' + ctx.message.text);
             }
+        });
+
+        bot.event('user_block', ctx => {
+            if (ctx.message.admin_id == config.adminId) return;
+            //ban(ctx.message.admin_id, `забанил юзера ${ctx.message.user_id} в паблике ${group.link}`);
+            bot.sendMessage(ctx.message.admin_id, '[Бот] Эй, не трогай чёрный список! Админ того пользователя разбанит, сам ты это уже не сделаешь (бот не даст)');
+            notifyAdmin(`[Бот] ВНИМАНИЕ! https://vk.com/id${ctx.message.admin_id} забанил юзера ${ctx.message.user_id} в паблике ${group.link}`);
+        });
+    
+        bot.event('user_unblock', ctx => {
+            if (ctx.message.admin_id == config.adminId) return;
+            ban(ctx.message.user_id, `несанкционированный разбан от юзера https://vk.com/id${ctx.message.admin_id}`);
+            bot.sendMessage(ctx.message.admin_id, '[Бот] Эй, не трогай чёрный список! Тот, кого ты пытался разбанить, забанен обратно');
+            notifyAdmin(`[Бот] https://vk.com/id${ctx.message.admin_id} разбанил юзера ${ctx.message.user_id} в паблике ${group.link}`);
+        });
+    
+        bot.event('group_change_photo', ctx => {
+            if (ctx.message.user_id == config.adminId) return;
+            bot.sendMessage(ctx.message.user_id, '[Бот] Эй, не трогай аватарку! Если ты выполнял миссию по её возврату, претензий нет :)');
+            notifyAdmin(`[Бот] ВНИМАНИЕ! https://vk.com/id${ctx.message.admin_id} сменил аватарку в паблике ${group.link}\n${ctx.message.photo.sizes[0].url}`);
         });
     }
     else {
@@ -153,26 +175,62 @@ function botSetup(bot, configIndex) {
             await unban(+cmd[0]);
             ctx.reply('[Бот] Разбанен');
         });
+        bot.command('/search', async ctx => {
+            let cmd = ctx.message.text.split(' ').slice(1);
+            if (cmd.length < 1) return ctx.reply('[Бот] /search [подстрока]');
+            ctx.reply('[Бот] Секунду...');
+            let r = await search(cmd.join(' '), true);
+            ctx.reply(`[Бот] Найдено ${r.length} сообщений. Первые 20:\n\n${r.slice(0, 20).map(x => `[${x.group_id} ${x.id}] ` + x.text.substr(0, 50) + (x.text.length > 50 ? '...' : '')).join('\n')}`);
+        });
+    
+        bot.command('/clearspam', async ctx => {
+            let cmd = ctx.message.text.split(' ').slice(1);
+            if (cmd.length < 1) return ctx.reply('[Бот] /clearspam [подстрока]');
+            ctx.reply('[Бот] Секунду...');
+            let r = await search(cmd.join(' '));
+            let count = 0;
+            let countOutdated = 0;
+            r = r.map(msgs => {
+                return msgs.filter(x => {
+                    if (x.date && new Date - new Date(x.date * 1000) < 1000 * 86400) {
+                        count++
+                        return true;
+                    }
+                    else {
+                        countOutdated++;
+                        return false;
+                    }
+                });
+            });
+            for (let i = 1; i < r.length; i++) {
+                let g = config.groups[i];
+                let msgs = r[i];
+                if (!msgs.length) continue;
+                try {
+                    await api('messages.delete', {
+                        access_token: g.token,
+                        group_id: g.id,
+                        message_ids: msgs.map(x => x.id).join(','),
+                        delete_for_all: 1
+                    });
+                }
+                catch (e) {
+                    if (e instanceof ApiError) return ctx.reply(`[Бот] Не удалось удалить сообщения из группы #${i}: ${e.response.error_code}`);
+                    else throw e;
+                }
+            }
+            ctx.reply(`[Бот] Найдено: ${count + countOutdated}; удалено: ${count}; старых сообщений: ${countOutdated}`);
+        });
+
+        bot.command('/uid', async ctx => {
+            let cmd = ctx.message.text.split(' ').slice(1);
+            if (cmd.length < 1) return ctx.reply('[Бот] /uid [ID или короткий URL]');
+            ctx.reply('[Бот] Секунду...');
+            let r = await getUserId(cmd[0].replace('https://vk.com/', ''));
+            ctx.reply(`[Бот] https://vk.com/${cmd[0]} == ${r}`);
+        });
     }
     bot.command('/test', ctx => ctx.reply('[Бот] Бот работает'));
-
-    bot.event('user_block', ctx => {
-        if (ctx.message.admin_id == config.adminId) return;
-        //ban(ctx.message.admin_id, `забанил юзера ${ctx.message.user_id} в паблике ${group.link}`);
-        bot.sendMessage(ctx.message.admin_id, '[Бот] Эй, не трогай чёрный список! Админ того пользователя разбанит, сам ты это уже не сделаешь (бот не даст)');
-    });
-
-    bot.event('user_unblock', ctx => {
-        if (ctx.message.admin_id == config.adminId) return;
-        ban(ctx.message.user_id, `несанкционированный разбан от юзера https://vk.com/id${ctx.message.admin_id}`);
-        bot.sendMessage(ctx.message.admin_id, '[Бот] Эй, не трогай чёрный список! Тот, кого ты пытался разбанить, забанен обратно');
-    });
-
-    bot.event('group_change_photo', ctx => {
-        if (ctx.message.user_id == config.adminId) return;
-        bot.sendMessage(ctx.message.user_id, '[Бот] Эй, не трогай аватарку! Если ты выполнял миссию по её возврату, претензий нет :)');
-        notifyAdmin(`АВАТАРКА! ${group.link}\n${ctx.message.photo.sizes[0].url}`);
-    })
 
     bot.startPolling().then(() => {
         log(`Запущен бот паблика #${configIndex} (${group.link})`);
@@ -209,7 +267,7 @@ async function unmod(group, user, reason) {
             user_id: user,
             is_contact: 0
         });
-        log(`Снят ред с юзера ${user} ${config.groups.indexOf(group)}: ${reason}`);
+        log(`Снят ред с юзера ${user}, паблик #${config.groups.indexOf(group)}: ${reason}`);
         return 1;
     }
     catch (e) {
@@ -281,5 +339,47 @@ async function notifyAdmin(msg) {
     }
     catch (e) {
         log('Не могу сообщить админу:', e.response ? e.response.error_code : e);
+    }
+}
+
+async function search(query, oneArray) {
+    let result = oneArray ? [] : [[]];
+    for (let i = 1; i < config.groups.length; i++) {
+        let g = config.groups[i];
+
+        let r = await api('messages.search', {
+            access_token: g.token,
+            q: query,
+            count: 100,
+            group_id: g.id,
+            v: '5.131'
+        });
+        if (oneArray) result = [...result, ...r.response.items.map(x => {
+            x.group_id = g.id;
+            return x;
+        })];
+        else {
+            if (!result[i]) result[i] = [];
+            result[i] = [...result[i], ...r.response.items.map(x => {
+                x.group_id = g.id;
+                return x;
+            })];
+        }
+    }
+    return result;
+}
+
+async function getUserId(shortLinkOrId) {
+    if (!isNaN(shortLinkOrId)) return +shortLinkOrId;
+    try {
+        let r = await api('users.get', {
+            access_token: config.adminToken,
+            user_ids: shortLinkOrId
+        });
+        return r.response[0] ? r.response[0].id : 0;
+    }
+    catch (e) {
+        if (e instanceof ApiError && e.response.error_code == 113 /* 113 Invalid user id */) return 0;
+        else throw e;
     }
 }
