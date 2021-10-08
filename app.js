@@ -147,7 +147,7 @@ function botSetup(bot, configIndex) {
         });
     
         bot.event('group_change_photo', ctx => {
-            if (ctx.message.user_id == config.adminId) return;
+            if (ctx.message.user_id == config.adminId) return notifyAdmin(`[Бот] Аватарка поменялась, ты штоле?)))`);
             bot.sendMessage(ctx.message.user_id, '[Бот] Эй, не трогай аватарку! Если ты выполнял миссию по её возврату, претензий нет :)');
             notifyAdmin(`[Бот] ВНИМАНИЕ! https://vk.com/id${ctx.message.admin_id} сменил аватарку в паблике ${group.link}\n${ctx.message.photo.sizes[0].url}`);
         });
