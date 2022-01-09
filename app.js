@@ -2,6 +2,7 @@ const VkBot = require('node-vk-bot-api');
 const api = require('node-vk-bot-api/lib/api');
 const ApiError = require('node-vk-bot-api/lib/errors/ApiError');
 const config = require('./config.json');
+const uptimeStart = new Date;
 function formatDate(date, includeMS = false) {
     const adjustZeros = (x, required = 2) => {
         x = String(x);
@@ -405,4 +406,15 @@ async function getUserId(shortLinkOrId) {
         if (e instanceof ApiError && e.response.error_code == 113 /* 113 Invalid user id */) return 0;
         else throw e;
     }
+}
+
+if (config.periodicRestart) {
+    setInterval(() => {
+        let ts = new Date;
+        if (ts.getHours() == 0 && ts.getMinutes() == 0 && ts - uptimeStart > 60000) {
+            console.log('Полночь, плановый перезапуск...');
+            process.exit(0);
+        }
+    }, 10000);
+    console.log('Приложение будет автоматически перезапускаться в полночь по времени сервера');
 }
