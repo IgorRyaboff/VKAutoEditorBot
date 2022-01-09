@@ -409,8 +409,8 @@ async function getUserId(shortLinkOrId) {
 
 if (config.periodicRestart) {
     setTimeout(() => {
-        console.log('Плановый перезапуск...');
+        log('Плановый перезапуск...');
         process.exit(0);
     }, config.periodicRestart);
-    console.log(`Приложение будет автоматически перезапускаться раз в ${config.periodicRestart} мс`);
+    log(`Приложение будет автоматически перезапускаться раз в ${config.periodicRestart} мс`);
 }
