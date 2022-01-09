@@ -2,6 +2,7 @@ const VkBot = require('node-vk-bot-api');
 const api = require('node-vk-bot-api/lib/api');
 const ApiError = require('node-vk-bot-api/lib/errors/ApiError');
 const config = require('./config.json');
+const appStart = new Date;
 function formatDate(date, includeMS = false) {
     const adjustZeros = (x, required = 2) => {
         x = String(x);
@@ -23,6 +24,21 @@ function formatDate(date, includeMS = false) {
 }
 function log(...args) {
     console.log(`[${formatDate(new Date, true)}]`, ...args);
+}
+function howMuchTime(ms) {
+    if (!isNaN(ms)) {
+        ms = +ms;
+        if (!ms) return 'Нисколько';
+        let days = Math.floor(ms / 1000 / 60 / 60 / 24);
+        let hours = Math.floor(ms / 1000 / 60 / 60) - days * 24;
+        let minutes = Math.floor(ms / 1000 / 60) - days * 24 * 60 - hours * 60;
+        let result = [];
+        if (days) result.push(`${days} сут`);
+        if (hours) result.push(`${hours} ч`);
+        if (minutes) result.push(`${minutes} мин`);
+        return result.length ? result.join(' ') : 'менее минуты';
+    }
+    else return 'Неизвестно';
 }
 log('Запускаем...');
 
@@ -255,7 +271,7 @@ function botSetup(bot, configIndex) {
             ctx.reply(`[Бот] https://vk.com/${cmd[0]} == ${r}`);
         });
     }
-    bot.command((config.debug ? '/' : '') + '/test', ctx => ctx.reply('[Бот] Бот работает'));
+    bot.command([(config.debug ? '/' : '') + '/test', (config.debug ? '/' : '') + '/тест'], ctx => ctx.reply('[Бот] Бот работает ' + howMuchTime(new Date - appStart)));
 
     bot.startPolling().then(() => {
         log(`Запущен бот паблика #${configIndex} (${group.link})`);
